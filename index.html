@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Soundboard</title>
+<style>
+  :root{
+    --bg:#0f1724; --card:#0b1220; --accent:#1e90ff; --text:#e6eef8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,#071224 0%,#071022 100%); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .app{width:100%; max-width:1100px;}
+  header{display:flex; gap:16px; align-items:center; margin-bottom:18px;}
+  header h1{font-size:20px;margin:0;}
+  .controls{margin-left:auto; display:flex; gap:10px; align-items:center;}
+  .controls input[type="file"]{display:none;}
+  .btn, button{background:var(--card); color:var(--text); border:1px solid rgba(255,255,255,0.04); padding:8px 10px; border-radius:8px; cursor:pointer;}
+  .btn:hover{transform:translateY(-2px)}
+  .toolbar{display:flex; gap:8px; align-items:center;}
+  .board{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-top:14px;}
+  .pad{background:linear-gradient(180deg,#081426,#071224); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center; min-height:100px; box-shadow:0 6px 14px rgba(0,0,0,0.6);}
+  .pad .label{font-weight:600; text-align:center;}
+  .pad .key{font-size:12px; opacity:0.7;}
+  .pad .play{padding:8px 12px; border-radius:8px; border:none; background:var(--accent); color:white; cursor:pointer;}
+  .pad.playing{outline:3px solid rgba(30,144,255,0.18);}
+  .small{font-size:13px; opacity:0.9}
+  .sidebar{margin-top:12px; display:flex; gap:12px; align-items:center;}
+  .vol{display:flex; gap:8px; align-items:center;}
+  footer{margin-top:14px; font-size:13px; opacity:0.8;}
+  @media (max-width:520px){ header h1{font-size:18px} .pad{min-height:90px} }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Soundboard</h1>
+      <div class="controls">
+        <label class="btn" title="Hang feltöltése">
+          Feltöltés
+          <input id="fileInput" type="file" accept="audio/*" multiple>
+        </label>
+        <button id="addFromUrl" class="btn">URL-ből hozzáad</button>
+        <div class="toolbar">
+          <button id="stopAll" class="btn">Stop minden</button>
+          <button id="clearAll" class="btn">Töröl mind</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="sidebar">
+      <div class="vol small">
+        <label for="volume">Fő hangerő</label>
+        <input id="volume" type="range" min="0" max="1" step="0.01" value="0.9" style="width:160px">
+      </div>
+      <div class="small">Billentyű: nyomj számot 1–9 (ha beállítva)</div>
+    </div>
+
+    <main>
+      <div id="board" class="board" aria-live="polite"></div>
+      <footer>Dobd rá a fájlokat, vagy használd a Feltöltés gombot. Hozzáadás után katt a "Assign key"-re és nyomj meg egy billentyűt (pl. 1), hogy azt a gombhoz rendeld.</footer>
+    </main>
+  </div>
+
+<script>
+/*
+  Egyszerű soundboard:
+  - dinamikusan adhatók hozzá hangok fájlból vagy URL-ből
+  - gombokhoz rendelhető billentyű
+  - egyszerre több hang is játszható
+*/
+const board = document.getElementById('board');
+const fileInput = document.getElementById('fileInput');
+const volumeControl = document.getElementById('volume');
+const stopAllBtn = document.getElementById('stopAll');
+const clearAllBtn = document.getElementById('clearAll');
+const addFromUrlBtn = document.getElementById('addFromUrl');
+
+let pads = []; // {id, name, url, key, audioInstances:[]}
+let globalVol = parseFloat(volumeControl.value);
+const keyMap = {}; // key -> padId
+
+function makePadObj(name, url){
+  return {
+    id: crypto.randomUUID(),
+    name,
+    url,
+    key: null,
+    audioInstances: []
+  };
+}
+
+function createPadElement(pad){
+  const el = document.createElement('div');
+  el.className = 'pad';
+  el.id = 'pad-'+pad.id;
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = pad.name;
+  const keyLabel = document.createElement('div');
+  keyLabel.className = 'key small';
+  keyLabel.textContent = pad.key? ('Key: ' + pad.key.toUpperCase()) : 'Nincs billentyű';
+  keyLabel.dataset.role = 'keylabel';
+
+  const playBtn = document.createElement('button');
+  playBtn.className = 'play';
+  playBtn.textContent = 'Play';
+  playBtn.onclick = ()=> playPad(pad.id);
+
+  const assignKeyBtn = document.createElement('button');
+  assignKeyBtn.className = 'btn';
+  assignKeyBtn.textContent = 'Assign key';
+  assignKeyBtn.onclick = ()=> assignKeyListener(pad.id, keyLabel);
+
+  const stopBtn = document.createElement('button');
+  stopBtn.className = 'btn';
+  stopBtn.textContent = 'Stop';
+  stopBtn.onclick = ()=> stopPad(pad.id);
+
+  const downloadLink = document.createElement('a');
+  downloadLink.className = 'btn';
+  downloadLink.textContent = 'Letöltés';
+  downloadLink.href = pad.url;
+  downloadLink.download = pad.name;
+  downloadLink.target = '_blank';
+  downloadLink.rel = 'noopener';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn';
+  removeBtn.textContent = 'Töröl';
+  removeBtn.onclick = ()=> removePad(pad.id);
+
+  const controls = document.createElement('div');
+  controls.style.display = 'flex';
+  controls.style.gap = '6px';
+  controls.style.flexWrap = 'wrap';
+  controls.style.justifyContent = 'center';
+  controls.style.marginTop = '6px';
+
+  controls.append(playBtn, stopBtn, assignKeyBtn, downloadLink, removeBtn);
+
+  el.append(label, keyLabel, controls);
+  return el;
+}
+
+function renderBoard(){
+  board.innerHTML = '';
+  for(const pad of pads){
+    const el = createPadElement(pad);
+    board.appendChild(el);
+  }
+}
+
+function playPad(padId){
+  const pad = pads.find(p=>p.id===padId);
+  if(!pad) return;
+  // create new Audio for simultaneous playback
+  const a = new Audio(pad.url);
+  a.volume = globalVol;
+  a.play().catch(e=>console.warn('Play failed:', e));
+  // visual
+  pad.audioInstances.push(a);
+  const el = document.getElementById('pad-'+pad.id);
+  el.classList.add('playing');
+  a.addEventListener('ended', ()=> {
+    // remove instance
+    pad.audioInstances = pad.audioInstances.filter(x=>x!==a);
+    if(pad.audioInstances.length===0) el.classList.remove('playing');
+  });
+}
+
+function stopPad(padId){
+  const pad = pads.find(p=>p.id===padId);
+  if(!pad) return;
+  for(const a of pad.audioInstances){
+    try{ a.pause(); a.currentTime = 0; } catch(e){}
+  }
+  pad.audioInstances = [];
+  const el = document.getElementById('pad-'+pad.id);
+  if(el) el.classList.remove('playing');
+}
+
+function stopAll(){
+  for(const p of pads) stopPad(p.id);
+}
+
+function removePad(padId){
+  const idx = pads.findIndex(p=>p.id===padId);
+  if(idx===-1) return;
+  // release key if assigned
+  const k = pads[idx].key;
+  if(k) delete keyMap[k];
+  stopPad(padId);
+  pads.splice(idx,1);
+  renderBoard();
+}
+
+function clearAll(){
+  stopAll();
+  pads = [];
+  for(const k in keyMap) delete keyMap[k];
+  renderBoard();
+}
+
+fileInput.addEventListener('change', e=>{
+  const files = Array.from(e.target.files || []);
+  for(const f of files){
+    const url = URL.createObjectURL(f);
+    const p = makePadObj(f.name, url);
+    pads.push(p);
+  }
+  renderBoard();
+  // reset input so same file can be added again later if needed
+  fileInput.value = '';
+});
+
+addFromUrlBtn.addEventListener('click', ()=>{
+  const url = prompt('Add meg az audio URL-t (mp3, wav):');
+  if(!url) return;
+  // try to determine name
+  const name = url.split('/').pop().split('?')[0] || 'hang';
+  const p = makePadObj(name, url);
+  pads.push(p);
+  renderBoard();
+});
+
+volumeControl.addEventListener('input', ()=>{
+  globalVol = parseFloat(volumeControl.value);
+  // update currently playing instances
+  for(const p of pads){
+    for(const a of p.audioInstances){
+      a.volume = globalVol;
+    }
+  }
+});
+
+stopAllBtn.addEventListener('click', stopAll);
+clearAllBtn.addEventListener('click', clearAll);
+
+// assign key workflow:
+let awaitingKeyForPad = null;
+function assignKeyListener(padId, keyLabel){
+  awaitingKeyForPad = padId;
+  keyLabel.textContent = 'Nyomj le egy billentyűt... (Esc = cancel)';
+  const onKey = (ev)=>{
+    ev.preventDefault();
+    const k = ev.key.toLowerCase();
+    if(k === 'escape'){ // cancel
+      awaitingKeyForPad = null;
+      document.removeEventListener('keydown', onKey);
+      renderBoard();
+      return;
+    }
+    // remove old mapping if key already used
+    if(keyMap[k]){
+      const oldPadId = keyMap[k];
+      const oldPad = pads.find(p=>p.id===oldPadId);
+      if(oldPad) oldPad.key = null;
+    }
+    // set mapping
+    const pad = pads.find(p=>p.id===padId);
+    if(pad){
+      pad.key = k;
+      keyMap[k] = padId;
+    }
+    awaitingKeyForPad = null;
+    document.removeEventListener('keydown', onKey);
+    renderBoard();
+  };
+  document.addEventListener('keydown', onKey);
+}
+
+// global keydown for playing pads
+document.addEventListener('keydown', (ev)=>{
+  if(awaitingKeyForPad) return; // handled by assignKeyListener
+  const k = ev.key.toLowerCase();
+  // allow number keys 1-9 and others - user defined
+  if(keyMap[k]){
+    ev.preventDefault();
+    const padId = keyMap[k];
+    playPad(padId);
+    return;
+  }
+  // quick shortcuts: digits 1..9 map to first pads
+  if(/^[1-9]$/.test(k)){
+    const idx = parseInt(k,10)-1;
+    if(pads[idx]){ playPad(pads[idx].id); }
+  }
+});
+
+// drag & drop onto board
+['dragenter','dragover','dragleave','drop'].forEach(eName=>{
+  board.addEventListener(eName, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+  });
+});
+board.addEventListener('drop', (e)=>{
+  const files = Array.from(e.dataTransfer.files || []).filter(f=>f.type.startsWith('audio/'));
+  for(const f of files){
+    const url = URL.createObjectURL(f);
+    pads.push(makePadObj(f.name, url));
+  }
+  renderBoard();
+});
+
+// make initial demo pads (optional)
+const demoUrls = [
+  // NOTE: nincs internetes hivatkozás beágyazva; így a demo üres marad — feltöltesz könnyen saját hangokat.
+];
+for(const d of demoUrls) pads.push(makePadObj(d.name, d.url));
+renderBoard();
+</script>
+</body>
+</html>
