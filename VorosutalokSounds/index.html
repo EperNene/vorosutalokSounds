@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Vörösutáló Sounds</title>
+  <style>
+    body {
+      background: #000; 
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #fff;
+      margin-bottom: 30px;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, 150px);
+      gap: 15px;
+      width: 90%;
+      max-width: 900px;
+    }
+    .board button {
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.1s ease-in-out;
+      box-shadow: 0 5px #444;
+    }
+    .board button:active {
+      transform: translateY(3px);
+      box-shadow: 0 2px #222;
+      background: #ccc;
+    }
+    .bottom-row {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
+    .legends {
+      margin-top: 40px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .legends span {
+      display: block;
+      margin: 5px 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vörösutáló Sounds</h1>
+  
+  <div class="board">
+    <button onclick="play('s1')">ÁÁ te geci</button>
+    <button onclick="play('s2')">ajja Neymar</button>
+    <button onclick="play('s3')">deep end</button>
+    <button onclick="play('s4')">DEZSÖ</button>
+    <button onclick="play('s5')">dszasztasztá</button>
+    <button onclick="play('s6')">Egy búzacsira</button>
+    <button onclick="play('s7')">girls need love</button>
+    <button onclick="play('s8')">gyá</button>
+    <button onclick="play('s9')">hobidé</button>
+    <button onclick="play('s10')">i wanna fxcking die bro</button>
+    <button onclick="play('s11')">itt van GWM</button>
+    <button onclick="play('s12')">joker nevetes</button>
+    <button onclick="play('s13')">konzol vilag ricsi</button>
+    <button onclick="play('s14')">most egy nyakas</button>
+    <button onclick="play('s15')">nabacsá</button>
+    <button onclick="play('s16')">Naruto nevu emberke</button>
+    <div class="bottom-row">
+      <button onclick="play('s17')">okay lets go</button>
+      <button onclick="play('s18')">what a fxck is this</button>
+    </div>
+  </div>
+
+  <!-- Audio fájlok -->
+  <audio id="s1" src="hang1.mp3"></audio>
+  <audio id="s2" src="hang2.mp3"></audio>
+  <audio id="s3" src="hang3.mp3"></audio>
+  <audio id="s4" src="hang4.mp3"></audio>
+  <audio id="s5" src="hang5.mp3"></audio>
+  <audio id="s6" src="hang6.mp3"></audio>
+  <audio id="s7" src="hang7.mp3"></audio>
+  <audio id="s8" src="hang8.mp3"></audio>
+  <audio id="s9" src="hang9.mp3"></audio>
+  <audio id="s10" src="hang10.mp3"></audio>
+  <audio id="s11" src="hang11.mp3"></audio>
+  <audio id="s12" src="hang12.mp3"></audio>
+  <audio id="s13" src="hang13.mp3"></audio>
+  <audio id="s14" src="hang14.mp3"></audio>
+  <audio id="s15" src="hang15.mp3"></audio>
+  <audio id="s16" src="hang16.mp3"></audio>
+  <audio id="s17" src="hang17.mp3"></audio>
+  <audio id="s18" src="hang18.mp3"></audio>
+
+  <script>
+    function play(id) {
+      const a = document.getElementById(id);
+      if (a) {
+        a.currentTime = 0;
+        a.play().catch(e => console.log('Hang nem játszható le:', e));
+      }
+    }
+  </script>
+
+  <!-- Legendák -->
+  <div class="legends">
+    Legendák:
+    <span>Kántor Eper</span>
+    <span>PetixR</span>
+    <span>Huszti Géza</span>
+    <span>Atechinnyó</span>
+  </div>
+</body>
+</html>
